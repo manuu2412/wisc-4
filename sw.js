@@ -1,16 +1,22 @@
-/* Service worker: funciona sin conexión (cache-first). Sube VERSION al publicar cambios. */
-const VERSION = 'wisc-v1';
+/* Service worker: funciona sin conexión y detecta actualizaciones.
+   Para publicar una versión nueva, sube el número de VERSION (wisc-v3, wisc-v5...). */
+const VERSION = 'wisc-v3';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/styles.css',
   './js/scoring.js', './js/report.js', './js/app.js',
   './lib/pdf-lib.min.js',
+  './fonts/poppins-400.woff', './fonts/poppins-500.woff', './fonts/poppins-700.woff',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png', './icons/favicon-32.png'
 ];
 
+// La versión nueva queda "en espera" hasta que la app avise (botón Actualizar)
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))));
+});
+self.addEventListener('message', e => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });
 self.addEventListener('activate', e => {
   e.waitUntil(
@@ -18,15 +24,18 @@ self.addEventListener('activate', e => {
       .then(() => self.clients.claim())
   );
 });
+
+// Red primero (con límite de 4 s) y caché como respaldo sin conexión
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  const req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      if (res.ok && new URL(e.request.url).origin === location.origin) {
-        const copy = res.clone();
-        caches.open(VERSION).then(c => c.put(e.request, copy));
-      }
+    Promise.race([
+      fetch(req, { cache: 'no-cache' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))
+    ]).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
       return res;
-    }).catch(() => (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)))
+    }).catch(() => caches.match(req).then(hit => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
   );
 });
