@@ -171,15 +171,19 @@
   function renderLogin() {
     app.innerHTML = `
       <main class="login">
-        <img class="logo" src="icons/icon-192.png" alt="" width="84" height="84">
-        <h1>WISC-IV</h1>
-        <p class="sub">Calificación e interpretación</p>
-        <form id="lf" autocomplete="on">
-          <div class="group">
-            <div class="row"><label for="u">Usuario</label><input id="u" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Usuario" required></div>
-            <div class="row"><label for="p">Contraseña</label><input id="p" name="password" type="password" autocomplete="current-password" placeholder="Contraseña" required></div>
-            <div class="row sw"><label for="rm">Mantener sesión</label><input id="rm" class="switch" type="checkbox" role="switch"></div>
+        <form id="lf" class="glass-card" autocomplete="on">
+          <div class="avatar" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M50 14c-11 0-19 9-19 21 0 8 3 14 8 18-12 4-22 11-24 24v9h70v-9c-2-13-12-20-24-24 5-4 8-10 8-18 0-12-8-21-19-21z"/></svg></div>
+          <h1>WISC-IV</h1>
+          <p class="sub">Calificación e interpretación</p>
+          <div class="uf">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18a1 1 0 0 1 1 1v.4l-10 6.3L2 6.4V6a1 1 0 0 1 1-1zm19 3.7V18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8.7l10 6.3 10-6.3z"/></svg>
+            <input id="u" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Usuario" aria-label="Usuario" required>
           </div>
+          <div class="uf">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-7-2a2 2 0 0 1 4 0v2h-4V7zm2 10.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+            <input id="p" name="password" type="password" autocomplete="current-password" placeholder="Contraseña" aria-label="Contraseña" required>
+          </div>
+          <label class="rem"><input id="rm" type="checkbox"><span>Mantener sesión</span></label>
           <button class="btn" type="submit">Entrar</button>
           <p class="login-err" id="lerr" role="alert"></p>
         </form>
@@ -339,16 +343,16 @@
       s += `<line x1="${P.x0}" x2="${P.x1}" y1="${g.y}" y2="${g.y}" stroke="var(--hair)" stroke-width=".6"/>`;
       s += `<text class="t" x="${P.x0 - 5}" y="${g.y + 3.5}" text-anchor="end">${g.v}</text>`;
     });
-    if (L.mid !== null) s += `<line x1="${P.x0}" x2="${P.x1}" y1="${L.mid}" y2="${L.mid}" stroke="#8E8E93" stroke-width=".9" stroke-dasharray="3 3"/>`;
+    if (L.mid !== null) s += `<line x1="${P.x0}" x2="${P.x1}" y1="${L.mid}" y2="${L.mid}" stroke="rgba(255,255,255,.55)" stroke-width=".9" stroke-dasharray="3 3"/>`;
     const pts = L.pts.filter(p => p.y !== null);
     for (let i = 1; i < pts.length; i++) {
       if (pts[i].idx !== undefined && pts[i].idx !== pts[i - 1].idx) continue;
-      s += `<line x1="${pts[i - 1].x}" y1="${pts[i - 1].y}" x2="${pts[i].x}" y2="${pts[i].y}" stroke="#8E8E93" stroke-width="1.8" stroke-linecap="round"/>`;
+      s += `<line x1="${pts[i - 1].x}" y1="${pts[i - 1].y}" x2="${pts[i].x}" y2="${pts[i].y}" stroke="rgba(255,255,255,.6)" stroke-width="1.8" stroke-linecap="round"/>`;
     }
     L.pts.forEach(p => {
       s += `<text class="t tb" x="${p.x}" y="${P.y1 + 15}" text-anchor="middle" ${colorLabels ? `style="fill:${p.color}"` : ''}>${p.label}</text>`;
       if (p.y !== null) {
-        s += `<circle cx="${p.x}" cy="${p.y}" r="4.6" fill="${p.color}" stroke="var(--card)" stroke-width="1.5"/>`;
+        s += `<circle cx="${p.x}" cy="${p.y}" r="4.6" fill="${p.color}" stroke="#fff" stroke-width="1.5"/>`;
         s += `<text class="tv" x="${p.x}" y="${p.y - 9}" text-anchor="middle">${p.v}</text>`;
       }
     });
@@ -513,7 +517,39 @@
 
   /* ---------- Arranque ---------- */
   render();
+  /* ---------- Actualizaciones de la app ---------- */
+  function showUpdateBar(reg) {
+    if ($('#update-bar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'update-bar';
+    bar.innerHTML = '<span>Nueva versión disponible</span><button type="button">Actualizar</button>';
+    document.body.appendChild(bar);
+    $('button', bar).addEventListener('click', () => {
+      // guarda lo capturado antes de recargar
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignorar */ }
+      $('button', bar).textContent = 'Actualizando…';
+      if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+      else location.reload();
+    });
+  }
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return;
+      reloading = true; location.reload();
+    });
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        const check = () => reg.update().catch(() => {});
+        const watch = w => w && w.addEventListener('statechange', () => {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdateBar(reg);
+        });
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateBar(reg);
+        reg.addEventListener('updatefound', () => watch(reg.installing));
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+        setInterval(check, 30 * 60 * 1000);
+        check();
+      }).catch(() => {});
+    });
   }
 })();
